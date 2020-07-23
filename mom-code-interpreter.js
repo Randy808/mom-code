@@ -305,44 +305,35 @@ class Parser {
 
     T(tokens){
         var left = this.Num(tokens);
-        var right = this.A(tokens)
-
-        return right ? {
-            type: SyntaxTreeTypes.BinaryExpression,
-            operator: BinaryOperator.PLUS,
-            left: left,
-            right: right
-        } : left
-
+        return this.A(left, tokens);
     }
 
-    A(tokens){
+    A(left, tokens){
         var token;
         if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.PLUS){
             token = this.eat(tokens[this.inputPos], TokenType.PLUS);
-            var left = this.Expression(tokens);
-            var right = this.A(tokens);
-            return right ? {
+            var right = this.Expression(tokens);
+            //var right = this.A(tokens);
+            return this.A({
                 type: SyntaxTreeTypes.BinaryExpression,
                 operator: BinaryOperator.PLUS,
                 left: left,
                 right: right
-            } : left;
+            }, tokens);
         }
 
         if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.MINUS){
             token = this.eat(tokens[this.inputPos], TokenType.MINUS);
-            var left = this.Expression(tokens);
-            var right = this.A(tokens);
-            return right ? {
+            var right = this.Expression(tokens);
+             return this.A({
                 type: SyntaxTreeTypes.BinaryExpression,
                 operator: BinaryOperator.MINUS,
                 left: left,
                 right: right
-            } : left;
+            }, tokens);
         }
 
-        return;
+        return left;
     }
     M(left, tokens){
 
@@ -386,16 +377,18 @@ class Parser {
                     right returned from expression` 
                     + JSON.stringify(node));
             }
-            var result;
-            result = node;
 
-            var right2 = this.A(tokens);
-            return right2 ? {
-                type: SyntaxTreeTypes.BinaryExpression,
-                operator: BinaryOperator.PLUS,
-                left: result,
-                right: right2
-            } : result;
+            
+
+            var node2 = this.A(node, tokens);
+
+            if(process.env.debug){
+                console.log(`\nThis is the 
+                    right returned from expression` 
+                    + JSON.stringify(node));
+            }
+
+            return node2;
         }
     }
 
