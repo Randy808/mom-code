@@ -2,10 +2,14 @@ const TokenType = {
     "AS": "AS",
     "CL_CURLY": "CL_CURLY",
     "CL_PAREN": "CL_PAREN",
+    "/": "DIV", //change constants to another object. Make this for tokenizing only
+    "DIV": "DIV",
     "EQ" : "EQ",
     "FOR": "FOR",
     "IDENTIFIER" : "IDENTIFIER",
     "LITERAL": "LITERAL",
+    "-": "MINUS",
+    MINUS: "MINUS",
     "MULT": "MULT",
     "NUMBER": "NUMBER",
     "OPERATOR": "OPERATOR",
@@ -44,7 +48,9 @@ const SyntaxTreeTypes = {
 
 const BinaryOperator = {
     MULT: "*",
-    PLUS: "+"
+    DIV: "/",
+    PLUS: "+",
+    MINUS: "-"
 }
 
 var symbolTable = {};
@@ -172,6 +178,13 @@ class Lexer {
         }
     }
 
+    parseChar(char){
+        if (this.inputString[this.currentPosition] == char) {
+            this.currentPosition++;
+            return new Token(TokenType[char], char);
+        }
+    }
+
     isChar(char){
         return char.toUpperCase() != char.toLowerCase();
     }
@@ -212,6 +225,8 @@ class Lexer {
             this.parseString() ||
             this.parsePrint() ||
             this.parsePlus() ||
+            this.parseChar("-") ||
+            this.parseChar("/") ||
             this.parseMult() ||
             this.parseIdentifier() ||
             this.error()
@@ -231,35 +246,15 @@ class Lexer {
     }
 }
 /*
-Grammar
-Start: ForLoop -> for(NUMBER){PRINT}
-Print -> print(Exp)
-
-Exp-> NUMBER X
-X->* NUMBER
-Exp-> T + F
-Exp->String
-
-//Exp->Number
-
-LF -> NUMBER MULT
-NUMBER-> NUMBER_ADD ADD
-ADD-> + NUMBER
-ADD->
-MULT->
-MULT-> * NUMBER
-SAME-> 
-Exp-> LF SAME
-ASSIGNMENT-> save EXP as identifier
-
-
-
+Exp -> ID
 Exp->F M A
 M->
 M-> * NUM M
+M-> / NUM M
 F -> T
 T->NUM A
 A-> + Exp A
+A-> - Exp A
 A->episilon
 ASSIGNMENT-> save EXP as identifier
 NUM -> iden
@@ -335,25 +330,48 @@ class Parser {
             } : left;
         }
 
-        return;
-    }
-    M(tokens){
-        var token;
-        if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.MULT){
-            token = this.eat(tokens[this.inputPos], TokenType.MULT);
-            var left = this.Num(tokens);
-            var right = this.M(tokens);
+        if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.MINUS){
+            token = this.eat(tokens[this.inputPos], TokenType.MINUS);
+            var left = this.Expression(tokens);
+            var right = this.A(tokens);
             return right ? {
                 type: SyntaxTreeTypes.BinaryExpression,
-                operator: BinaryOperator.MULT,
+                operator: BinaryOperator.MINUS,
                 left: left,
                 right: right
-            } : left
+            } : left;
         }
 
         return;
     }
+    M(left, tokens){
 
+        //TODO: Don't make this right associative
+        var token;
+        if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.MULT){
+            token = this.eat(tokens[this.inputPos], TokenType.MULT);
+            var right = this.Num(tokens);
+            return this.M({
+                type: SyntaxTreeTypes.BinaryExpression,
+                operator: BinaryOperator.MULT,
+                left: left,
+                right: right
+            }, tokens);
+        }
+
+        if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.DIV){
+            token = this.eat(tokens[this.inputPos], TokenType.DIV);
+            var right = this.Num(tokens);
+            return this.M({
+                type: SyntaxTreeTypes.BinaryExpression,
+                operator: BinaryOperator.DIV,
+                left: left,
+                right: right
+            }, tokens);
+        }
+
+        return left;
+    }
 
     Expression(tokens){
         var token;
@@ -362,14 +380,14 @@ class Parser {
         }
         else{
             var left = this.F(tokens);
-            var right = this.M(tokens);
+            var node = this.M(left, tokens);
+            if(process.env.debug){
+                console.log(`\nThis is the 
+                    right returned from expression` 
+                    + JSON.stringify(node));
+            }
             var result;
-            result = right ? {
-                type: SyntaxTreeTypes.BinaryExpression,
-                operator: BinaryOperator.MULT,
-                left: left,
-                right: right
-            } : left;
+            result = node;
 
             var right2 = this.A(tokens);
             return right2 ? {
@@ -385,6 +403,9 @@ class Parser {
         this.eat(tokens[this.inputPos], TokenType.PRINT);
         this.eat(tokens[this.inputPos], TokenType.OP_PAREN);
         var value = this.Expression(tokens);
+        if(process.env.debug){
+            console.log(`\n\nThis is the value of the expression inside print: ${JSON.stringify(value)}`);
+        }
         this.eat(tokens[this.inputPos], TokenType.CL_PAREN);
 
         return {
@@ -520,6 +541,12 @@ class Interpreter{
 
         if(subTree.operator == BinaryOperator.PLUS){
             return left + right;
+        }
+        else if(subTree.operator == BinaryOperator.MINUS){
+            return left - right;
+        }
+        else if(subTree.operator == BinaryOperator.DIV){
+            return left / right;
         }
         else{
             return left * right;
