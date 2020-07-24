@@ -246,12 +246,11 @@ class Lexer {
     }
 }
 /*
-Exp -> identifier
-Exp-> string
+Exp -> ID
 Exp->F M A
 M->
-M-> * EXP M
-M-> / EXP M
+M-> * NUM M
+M-> / NUM M
 F -> T
 T->NUM A
 A-> + Exp A
@@ -342,7 +341,7 @@ class Parser {
         var token;
         if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.MULT){
             token = this.eat(tokens[this.inputPos], TokenType.MULT);
-            var right = this.Expression(tokens);
+            var right = this.Num(tokens);
             return this.M({
                 type: SyntaxTreeTypes.BinaryExpression,
                 operator: BinaryOperator.MULT,
@@ -367,30 +366,30 @@ class Parser {
 
     Expression(tokens){
         var token;
-        var left;
         if(tokens[this.inputPos].type == TokenType.STRING){
-            left =  this.eat(tokens[this.inputPos], TokenType.STRING);
+            return this.eat(tokens[this.inputPos], TokenType.STRING);
         }
         else{
-            left = this.F(tokens);
+            var left = this.F(tokens);
+            var node = this.M(left, tokens);
+            if(process.env.debug){
+                console.log(`\nThis is the 
+                    right returned from expression` 
+                    + JSON.stringify(node));
+            }
+
+            
+
+            var node2 = this.A(node, tokens);
+
+            if(process.env.debug){
+                console.log(`\nThis is the 
+                    right returned from expression` 
+                    + JSON.stringify(node));
+            }
+
+            return node2;
         }
-
-        var node = this.M(left, tokens);
-        if(process.env.debug){
-            console.log(`\nThis is the 
-                right returned from expression` 
-                + JSON.stringify(node));
-        }
-
-        var node2 = this.A(node, tokens);
-
-        if(process.env.debug){
-            console.log(`\nThis is the 
-                right returned from expression` 
-                + JSON.stringify(node));
-        }
-
-        return node2;
     }
 
     Print(tokens) {
@@ -543,34 +542,8 @@ class Interpreter{
             return left / right;
         }
         else{
-            var stringOp = this.HandleMultBetweenNumAndString(left, right);
-
-            if(stringOp){
-                return stringOp;
-            }
             return left * right;
         }
-    }
-
-    HandleMultBetweenNumAndString(left, right){
-        var string;
-        var num;
-        if(typeof left == "string" &&
-                typeof right == "number" ){
-            string = left;
-            num = right;
-        }
-        else if(typeof right == "string" &&
-                    typeof left == "number" ){
-            string = right;
-            num = left;
-        }
-
-        let s = "";
-        for(let i = 0 ; i < num ; i++){
-            s+=string;
-        }
-        return s;
     }
 
     Assignment(subTree){
