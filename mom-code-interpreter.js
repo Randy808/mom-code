@@ -250,7 +250,9 @@ Exp -> identifier
 Exp-> string
 Exp->F M A
 M->
-M-> * EXP M
+NumOrStr -> string
+NumOrStr->NUM
+M-> * NumOrStr M
 M-> / EXP M
 F -> T
 T->NUM A
@@ -336,13 +338,28 @@ class Parser {
 
         return left;
     }
-    M(left, tokens){
 
-        //TODO: Don't make this right associative
+    Str(tokens){
+        return this.eat(tokens[this.inputPos], TokenType.STRING);
+    }
+
+    NumOrStr(tokens){
+        if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.NUMBER){
+            return this.Num(tokens);
+        }
+        else if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.STRING){
+            return this.Str(tokens);
+        }
+        else{
+            throw new Error("Expected number or string");
+        }
+    }
+
+    M(left, tokens){
         var token;
         if(tokens[this.inputPos] && tokens[this.inputPos].type == TokenType.MULT){
             token = this.eat(tokens[this.inputPos], TokenType.MULT);
-            var right = this.Expression(tokens);
+            var right = this.NumOrStr(tokens);
             return this.M({
                 type: SyntaxTreeTypes.BinaryExpression,
                 operator: BinaryOperator.MULT,
@@ -369,7 +386,7 @@ class Parser {
         var token;
         var left;
         if(tokens[this.inputPos].type == TokenType.STRING){
-            left =  this.eat(tokens[this.inputPos], TokenType.STRING);
+            left = this.Str(tokens);
         }
         else{
             left = this.F(tokens);
