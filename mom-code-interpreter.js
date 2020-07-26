@@ -43,7 +43,8 @@ const SyntaxTreeTypes = {
     BinaryExpression: "BinaryExpression",
     Print: "print",
     String: "STRING",
-    "IDENTIFIER": "IDENTIFIER"
+    "IDENTIFIER": "IDENTIFIER",
+    FUNCTION: "FUNCTION"
 }
 
 const BinaryOperator = {
@@ -202,7 +203,10 @@ class Lexer {
     }
 
     discardWhitespace(){
-        while(this.currentPosition < this.inputString.length && this.inputString[this.currentPosition] == " "){
+        while(this.currentPosition < this.inputString.length 
+            && (this.inputString[this.currentPosition] == " " 
+                || this.inputString[this.currentPosition] == "\n"
+                || this.inputString[this.currentPosition] == "\t")){
            this.currentPosition++;
         }
     }
@@ -287,10 +291,11 @@ class Parser {
     }
     eat(token, tokenType) {
         this.enforceTokensNotNull();
-        if (token && token.type == tokenType) {
+        if (token.type == tokenType) {
             this.inputPos++;
             return token;
         } else {
+            
             throw new Error("Did not match expected syntax");
         }
     }
@@ -432,29 +437,23 @@ class Parser {
         this.eat(tokens[this.inputPos], TokenType.CL_PAREN);
         this.eat(tokens[this.inputPos], TokenType.OP_CURLY);
 
-        var body;
-        if(tokens[this.inputPos] &&
-            tokens[this.inputPos].type == TokenType.PRINT){
-            body = this.Print(tokens);
-        }
-        else if(tokens[this.inputPos] &&
-            tokens[this.inputPos].type == TokenType.SAVE){
-            body = this.Assignment(tokens);
-        }
-        else{
-            this.Expression(tokens);
+        var body = []
+        while(tokens[this.inputPos].type != TokenType.CL_CURLY){
+             body.push(this.Start(tokens));
         }
         this.eat(tokens[this.inputPos], TokenType.CL_CURLY);
 
         return {
             type: SyntaxTreeTypes.FOR,
             iterationCount: iterationCount,
-            body: body
+            body: {
+                type: SyntaxTreeTypes.FUNCTION,
+                body: body
+            }
         }
     }
 
     Assignment(tokens){
-        debugger;
         this.eat(tokens[this.inputPos], TokenType.SAVE);
         var val = this.Expression(tokens)
         this.eat(tokens[this.inputPos], TokenType.AS);
@@ -467,27 +466,41 @@ class Parser {
             value: val
         }
     }
-    parseTokens(tokens) {
-        this.tokens = tokens;
+
+    Start(tokens){
         var AST;
-        if(tokens[0].type == TokenType.FOR){
+
+        if(tokens[this.inputPos].type == TokenType.FOR){
             AST = this.ForLoop(tokens);
         }
-        else if(tokens[0].type == TokenType.PRINT){
+        else if(tokens[this.inputPos].type == TokenType.PRINT){
             AST = this.Print(tokens);
         }
-        else if(tokens[0].type == TokenType.SAVE){
+        else if(tokens[this.inputPos].type == TokenType.SAVE){
             AST = this.Assignment(tokens);
         }
         else{
             AST = this.Expression(tokens);
         }
 
+        return AST;
+    }
+    parseTokens(tokens) {
+        this.tokens = tokens;
+        var treeList = [];
+
+        while(this.inputPos < tokens.length){
+            treeList.push(this.Start(tokens));
+        }
+
         if(process.env.debug){
             console.log("\n\n")
-            console.log(JSON.stringify(AST));
+            console.log(JSON.stringify(treeList));
         }
-        return AST;
+        return {
+            type: SyntaxTreeTypes.FUNCTION,
+            body: treeList
+        };
     }
 }
 
@@ -504,7 +517,6 @@ class Interpreter{
     }
     
     Expression(subTree){
-        debugger;
         if(subTree.type == SyntaxTreeTypes.BinaryExpression){
             return this.BinaryExpression(subTree);
         }
@@ -529,16 +541,15 @@ class Interpreter{
     }
 
     ForLoop(subTree){
-        debugger;
         if(subTree.type != SyntaxTreeTypes.FOR){
             return;
         }
         var i = 0;
         
-        var upTo = this.interpret(subTree.iterationCount);
+        var upTo = this.Start(subTree.iterationCount);
         //Try all accepatble bodies
         for(var i = 0 ; i < upTo; i++){
-            this.interpret(subTree.body);
+            this.Start(subTree.body);
         }
     }
 
@@ -591,7 +602,7 @@ class Interpreter{
     }
 
     Assignment(subTree){
-        symbolTable[subTree.identifier] = this.interpret(subTree.value);
+        symbolTable[subTree.identifier] = this.Start(subTree.value);
     }
 
     IdentifierExpression(subTree){
@@ -602,15 +613,8 @@ class Interpreter{
         return symbolTable[subTree.value]
     }
 
-    interpret(tree){
-        //TODO: Shouldn't filter on BinaryExpression; Should filter on Expression.
-        //BinaryExpression is subset of Expression.
-        //TODO: Remove else case. 
-            //Right now it handles TokenType.NUM.
-            //TokenType.NUM should get handled by Expression as well
-            //In fact, the type filtering should be done inside the methods.
-                //The interpretation should stop after one of the methods returns something.
-                //Like in Parsing above
+
+    Start(tree){
         if(tree.type == SyntaxTreeTypes.FOR){
             return this.ForLoop(tree)
         }
@@ -626,9 +630,28 @@ class Interpreter{
         else if(tree.type == TokenType.IDENTIFIER){
             return this.IdentifierExpression(tree);
         }
+        else if(tree.type == SyntaxTreeTypes.FUNCTION){
+            for(var subTree of tree.body){
+                this.Start(subTree);
+            }
+        }
         else{ //FOR TokenType.NUM
             return tree.value;
         }
+    }
+    interpret(tree){
+        //TODO: Shouldn't filter on BinaryExpression; Should filter on Expression.
+        //BinaryExpression is subset of Expression.
+        //TODO: Remove else case. 
+            //Right now it handles TokenType.NUM.
+            //TokenType.NUM should get handled by Expression as well
+            //In fact, the type filtering should be done inside the methods.
+                //The interpretation should stop after one of the methods returns something.
+                //Like in Parsing above
+        console.log("\n\n\n INTERPRET")
+        console.log(JSON.stringify(tree))
+        this.Start(tree);
+        
     }
 }
 
@@ -647,6 +670,22 @@ function readInput() {
     }));
 }
 
+function interpretCode(input){
+    if(process.env.debug){
+        console.log("Input: ",input)
+    }
+    var lexer = new Lexer(input);
+    var tokens = lexer.readTokens();
+
+    var parser = new Parser();
+    var treeList = parser.parseTokens(tokens);
+    var interpreter = new Interpreter();
+    interpreter.interpret(treeList);
+
+    if(process.env.debug){
+        console.log(symbolTable);
+    }
+}
 
 async function evaluateStdin() {
     var input;
@@ -664,25 +703,33 @@ async function evaluateStdin() {
     }
 }
 
-evaluateStdin()
-    .catch(e => {
-        console.log(e)
-    })
+var fs = require('fs').promises;
 
-function interpretCode(input){
-    if(process.env.debug){
-        console.log("Input: ",input)
+async function startInterpreter(){
+    if(!process.argv[2]){
+        evaluateStdin()
+        .catch(e => {
+            console.log(e)
+        })
     }
-    var lexer = new Lexer(input);
-    var tokens = lexer.readTokens();
-
-    var parser = new Parser();
-    var AST = parser.parseTokens(tokens);
-    debugger;
-    var interpreter = new Interpreter();
-    interpreter.interpret(AST);
-
-    if(process.env.debug){
-        console.log(symbolTable);
+    else{
+        var fh = await fs.open(`./${process.argv[2]}`);
+        var a = await fh.readFile({
+            encoding: 'utf8'
+        });
+        console.log(JSON.stringify(a))
+        interpretCode(a)
     }
 }
+
+startInterpreter();
+
+/*
+S -> X + num
+X -> num
+X -> string
+
+S
+X        + num
+num
+*/
