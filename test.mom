@@ -1,8 +1,8 @@
 save 10 as limit
 save 0 as i
-save 0 as j
 repeat(limit){
 	save i + 1 as i
+	save 0 as j
 	repeat(limit){
 		save j + 1 as j
 		print(i + "," + j)
