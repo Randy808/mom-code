@@ -5,7 +5,7 @@ The language supports numeric expressions with at most 2 specific operators -- `
 ## Loops
 Loops in mom-code have the following syntax: 
 
-`repeat(x){ y }` is the syntax used to repeat an expression y an x number of times.
+`repeat(x){ y }` is the syntax used to repeat an expression y an x number of times.f
 
 ## Variables
 Variables in mom-code have a different syntax than what would be expected of a traditional imperative language.
